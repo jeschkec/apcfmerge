@@ -1,35 +1,18 @@
 NAME
-    
-    apacheconf-scanner - print the complete apache config, including include
-    files
+    apcfmerge - print the complete apache config, including include files
 
 SYNOPSIS
-    
-    apacheconf-scanner [OPTIONS] [ARGUMENTS]
+    apcfmerge [OPTIONS] [ARGUMENTS]
 
-    OPTIONS
-      --help, -h 
-        Print this help
-
-      --version, -V
-        Version information
-
-      --stdin, --si
-        Read from STDIN
-
-      --no-stats
-        Print no statistics after program execution
-
-      --debug
-        Print debugging information
-
-    ARGUMENTS
-
-      --httpd-conf=F<httpd.conf>
-        Read httpd.conf from this location
-
-      --server-root=F<server-root>
-        Path to ServerRoot, overwrites the settings in httpd.conf
+        -h  --help      Print help
+        -V  --version   Print version
+            --stdin     Read from STDIN
+            --no-stats  Print no statistics        
+            --debug     Print debugging informations
+            --httpd-conf=FILE
+                        Read httpd.conf from FILE
+            --server-root=PATH
+                        Path to server root
 
 OPTIONS
     --help, -h
@@ -57,20 +40,20 @@ ARGUMENTS
 
 EXAMPLES
       Assuming your httpd.conf file is located at /etc/apache/httpd.conf
-      call the apacheconf-scanner with the following parameters:
+      call the apcfmerge with the following parameters:
 
-          apacheconf-scanner --httpd-conf=/etc/apache/httpd.conf
+          apcfmerge --httpd-conf=/etc/apache/httpd.conf
 
       If, for any circumstances, your ServerRoot is not set or you want to
-      override the settings invoke the apacheconf-scanner with the following
+      override the settings invoke the apcfmerge with the following
       parameters (assuming, your server root is /srv/www)
 
-          apacheconf-scanner --httpd-conf=/etc/apache/httpd.conf --server-root=/srv/www
+          apcfmerge --httpd-conf=/etc/apache/httpd.conf --server-root=/srv/www
 
       If you want to read your httpd.conf from the standard input (i.e. by
-      piping output to the apacheconf-scanner), use the --stdin option:
+      piping output to the apcfmerge), use the --stdin option:
 
-          cat /etc/apache/httpd.conf | apacheconf-scanner --stdin
+          cat /etc/apache/httpd.conf | apcfmerge --stdin
 
       (This example is somewhat useless, because you can read the file
       directly and save your time from wasting it with cat and the slow
@@ -78,31 +61,30 @@ EXAMPLES
 
 SEE ALSO
     apachectl - for checking your apache configuration for syntax
+
 INSTALL
     You need a couple of (CPAN) libraries to use this script:
 
     * Pod::Usage
     * Getopt::Long
+
 VERSION
-    apacheconf-scanner
+    apcfmerge
     Version 1.0.1
     Revision $Rev: 2 $,
     Date $Date: 2009-12-04 10:00:07 +0100 (Fr, 04 Dez 2009) $
+
 BUGS AND LIMITATIONS
   Windows
-
-    The apacheconf-scanner is yet not tested with Windows, because the
-    maintainer is currently refusing to use such a platform. If you can
-    provide experience with this, please feel free to contact the
-    maintainer.
+    The apcfmerge is yet not tested with Windows, because the maintainer is
+    currently refusing to use such a platform. If you can provide experience
+    with this, please feel free to contact the maintainer.
 
   Circular includes
-
     In this current version, circular includes are not detected. A endless
     loop will be created.
 
   Contact
-
       Please report bugs to Christoph Jeschke <dev@christoph-jeschke.de>.
 
       Please set also your LC_MESSAGES to "C".
@@ -111,12 +93,10 @@ BUGS AND LIMITATIONS
 
 LICENSE AND COPYRIGHT
   COPYRIGHT
-
-    apacheconf-scanner - print the complete httpd config Copyright (c) 2009
-    Christoph Jeschke
+    apcfmerge - print the complete httpd config Copyright (c) 2009 Christoph
+    Jeschke
 
   LICENSE
-
     This program is free software; you can redistribute it and/or modify it
     under the terms of the GNU General Public License as published by the
     Free Software Foundation; either version 2 of the License.
