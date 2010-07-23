@@ -1,0 +1,483 @@
+#! /usr/bin/perl
+###############################################################################
+#
+#   apcfmerge
+#   built a single configuration file from httpd.conf and all include files
+#
+#   $Id: apcfmerge 2 2009-12-04 09:00:07Z jeschkec $
+#
+###############################################################################
+
+# Pragmas
+###############################################################################
+use strict;
+use warnings;
+use diagnostics;
+use Pod::Usage;
+use Getopt::Long;
+
+# Parameter Handling
+###############################################################################
+
+##
+#   Contains flags and values, provided by the OPTIONS and PARAMETERS
+#   See POD OPTIONS and PARAMETERS for parameters
+#
+#   call_help                       If to call the help (POD USAGE)
+#   call_version                    If to print version informations
+#                                   (POD VERSION)
+#   collect_no_stats                Collect no stats and therefore, don't print
+#                                   the stats after main program execution
+#
+our $arguments_ref =
+{
+    'server_root_path'              =>  undef,
+    'httpd_conf_path'               =>  undef,
+    'read_stdin'                    =>  undef,
+    'call_help'                     =>  undef,
+    'call_version'                  =>  undef,
+    'collect_no_stats'              =>  undef,
+};
+
+##
+#   Contains values filled while recursing over the configuration:
+#
+#   parsed_lines_ref:               Count _lines_ of the parsed files
+#   parsed_includes_ref             Count _files_ included in the conf
+#   parsed_files_ref                Count _files_ - all files
+#   parsed_files_ref_names_ref      Filenames of the parsed _files_
+#
+our $statistic_infos_ref =
+{
+    'parsed_lines_ref'              =>  0,
+    'parsed_includes_ref'           =>  0,
+    'parsed_files_ref'              =>  0,
+    'parsed_files_names_ref'        =>  [],
+};
+
+##
+#   Collect options. If not fully satisfied, print POD USAGE
+#
+GetOptions(
+    'server-root=s'                 =>  \$arguments_ref->{'server_root_path'},
+    'httpd-conf=s'                  =>  \$arguments_ref->{'httpd_conf_path'},
+    'stdin|si'                      =>  \$arguments_ref->{'read_stdin'},
+    'help|h'                        =>  \$arguments_ref->{'call_help'},
+    'version|V'                     =>  \$arguments_ref->{'call_version'},
+    'no-stats'                      =>  \$arguments_ref->{'collect_no_stats'},
+    'debug'                         =>  \$arguments_ref->{'print_debug_info'},
+) or pod2usage( 
+    -msg                            =>  q{Error! Please check the following }
+                                        . q{information for the correct syntax:}, 
+    -exitstatus                     =>  1, 
+    -verbose                        =>  99,
+    -sections                       =>  q{SYNOPSIS|OPTIONS|ARGUMENTS|BUGS AND LIMITATIONS},
+);
+
+# Subroutines
+###############################################################################
+
+##
+#   Print help (POD USAGE)
+#
+#   Params:
+#       None
+#   Returns:
+#       None
+#
+sub show_help
+{
+    pod2usage(
+        -exitstatus =>  0,
+        -verbose    =>  99,
+        -sections   =>  q{SYNOPSIS},
+    );
+}
+
+##
+#   Print version information (POD VERSION)
+#
+#   Rarams:
+#       None
+#   Returns
+#       None
+#
+sub show_version
+{
+    pod2usage(
+        -exitstatus =>  0,
+        -verbose    =>  99,
+        -sections   =>  q{VERSION},
+    );
+}
+
+##
+#   Select base input: If --stdin is set, use STDIN, instead of a
+#   configuration file
+#
+#   Params:
+#       None
+#   Returns:
+#       Reference, pointing to a type glob (file handle)
+#
+sub select_input
+{
+    # --stdin is given
+    if ($arguments_ref->{'read_stdin'})
+    {
+        return *STDIN;
+    }
+
+    # a filename is given; print usage, if the file does not exists
+    if ( -s $arguments_ref->{'httpd_conf_path'})
+    {
+        open HTTPDCONF, $arguments_ref->{'httpd_conf_path'}
+            or pod2usage(
+                -msg        =>  qq{Error! Can nott open httpd config file }
+                                . $arguments_ref->{'httpd_conf_path'},
+                -exitstatus =>  69,
+                -verbose    =>  99,
+                -sections   =>  q{SYNOPSIS|OPTIONS|ARGUMENTS|BUGS AND LIMITATIONS},
+            );
+
+        return *HTTPDCONF;
+    }
+}
+
+##
+#   Print the httpd configuration recursive. Follows Include-Statements,
+#   by literal file name or fnmatch()-like pattern.
+#
+#   Params:
+#       Filehandle, a reference pointing to a typeglob
+#   Returns:
+#       1
+#
+sub print_recursive
+{
+    # Read from this filehandle
+    my $config_file_handle = shift;
+    
+    # Update parsed_files counter
+    $statistic_infos_ref->{'parsed_files_ref'}++;
+
+    # Read file handle line by line
+    while(<$config_file_handle>) {
+        # Copy the current line into a new variable    
+        my  $config_file_line = $_;
+        chomp $config_file_line;
+        
+        # Update the parsed_lines counter
+        $statistic_infos_ref->{'parsed_lines_ref'}++;
+
+        # If the --server-root parameter is not set, update it from
+        # configuration file
+        if (
+                (/^\s*(?!#)\s*ServerRoot\s+["']?([^"'\s]+)["']?/i)
+            &&  (! $arguments_ref->{'server_root_path'})
+        )
+        {
+            $arguments_ref->{'server_root_path'} = $1;
+        }
+
+        # Detect a Include-Statement and recurse to the file(s)
+        if (/^\s*(?!#)\s*Include\s+["']?([^"'\s]+)["']?/i)
+        {
+            my  $sub_file_path = $1;
+            
+            # Is the filename a absolute or relative one? If not, prepend
+            # with the ServerRoot
+            unless ($sub_file_path =~ qr!^[/\\]{1}!)
+            {
+                $sub_file_path =
+                    $arguments_ref->{'server_root_path'} . '/' . $sub_file_path;
+            }
+            
+            # Translate a (possible) filename pattern to real filenames
+            for $sub_file_path (glob($sub_file_path))
+            {
+                # Get a file handle by file name
+                open CONFIGFILE, $sub_file_path
+                    or die("Can't open file ${$sub_file_path}");
+
+                # Update the parsed_includes counter
+                $statistic_infos_ref->{'parsed_includes_ref'}++;
+
+                # Update the parsed_files_name array
+                push(
+                    @{$statistic_infos_ref->{'parsed_files_names_ref'}},
+                    $sub_file_path
+                );
+                
+                # And re-call this function by providing a reference,
+                # pointing to a type glob
+                print_recursive(*CONFIGFILE);
+            }
+
+            next;
+        }
+
+        # Print current line to STDOUT
+        print STDOUT $config_file_line, "\n";
+    } 
+}
+
+##
+#   Print the collected statistics
+#
+#   Params:
+#       None
+#   Returns:
+#       1
+#
+sub show_statistics
+{
+    # Print count of parsed files
+    print STDERR 'Files: ',
+        $statistic_infos_ref->{'parsed_files_ref'}, "\n";
+    
+    # Print count of parsed lines
+    print STDERR 'Lines: ',
+        $statistic_infos_ref->{'parsed_lines_ref'}, "\n";
+    
+    # Print count of parsed include files
+    print STDERR 'Include Files: ',
+        $statistic_infos_ref->{'parsed_includes_ref'}, "\n";
+    
+    # Name of each parsed include file
+    foreach(@{$statistic_infos_ref->{'parsed_files_names_ref'}}) {
+        print STDERR qq{\t$_\n}
+    }
+    
+    return 1;
+}
+
+# Main
+###############################################################################
+
+# General operation information:
+#   1st, check if the help oder version is called. Print it and finish.
+#   2nd, get a proper file handle: stdin or a file
+#   3rd, recursive parse the configuration file
+#   4th, if the statistic information is not disabled, print them
+
+
+#   1st, check if the help oder version is called. Print it and finish.
+show_help() if $arguments_ref->{'call_help'};
+show_version() if $arguments_ref->{'call_version'};
+
+#   2nd, get a proper file handle: stdin or a file
+#   3rd, recursive parse the configuration file
+print_recursive(
+    select_input()
+);
+
+#   4th, if the statistic information is not disabled, print them
+show_statistics()   unless $arguments_ref->{'collect_no_stats'};
+
+exit 0;
+
+# Documentation
+###############################################################################
+__END__
+
+=head1  NAME
+
+apcfmerge - print the complete apache config, including include files
+
+=head1  SYNOPSIS
+
+B<apcfmerge> B<[OPTIONS]> B<[ARGUMENTS]>
+
+    -h  --help      Print help
+    -V  --version   Print version
+        --stdin     Read from STDIN
+        --no-stats  Print no statistics        
+        --debug     Print debugging informations
+        --httpd-conf=FILE
+                    Read httpd.conf from FILE
+        --server-root=PATH
+                    Path to server root
+
+=head1  OPTIONS
+
+=over 4
+
+=item B<--help>, B<-h>
+
+Print this help
+
+=item B<--version>, B<-V>
+
+Print version information
+
+=item B<--stdin>, B<--si>
+
+Read data from STDIN
+
+=item B<--no-stats>
+
+Print no statistics after program execution
+
+=item B<--debug>
+
+Print debugging information
+
+=back
+
+=head1  ARGUMENTS
+
+=over 4
+
+=item B<--httpd-conf=F<httpd.conf>>
+
+Read the httpd configuration from F<httpd.conf>.
+
+=item B<--server-root=F<server-root>>
+
+Set ServerRoot to F<server-root> instead reading it from httpd
+configuration file.
+
+=back
+
+=head1  EXAMPLES
+
+=over 2
+
+=item
+
+Assuming your httpd.conf file is located at /etc/apache/httpd.conf
+call the apcfmerge with the following parameters:
+
+    apcfmerge --httpd-conf=/etc/apache/httpd.conf
+
+=item
+
+If, for any circumstances, your ServerRoot is not set or you want to
+override the settings invoke the apcfmerge with the
+following parameters (assuming, your server root is /srv/www)
+
+    apcfmerge --httpd-conf=/etc/apache/httpd.conf --server-root=/srv/www
+
+=item
+
+If you want to read your httpd.conf from the standard input (i.e. by
+piping output to the apcfmerge), use the --stdin
+option:
+
+    cat /etc/apache/httpd.conf | apcfmerge --stdin
+
+(This example is somewhat useless, because you can read the file
+directly and save your time from wasting it with cat and the slow
+pipe.)
+
+=back
+
+=head1  SEE ALSO
+
+=over 2
+
+=item
+L<apachectl> - for checking your apache configuration for syntax
+
+=back
+
+=head1  INSTALL
+
+You need a couple of (CPAN) libraries to use this script:
+
+=over 2
+
+=item * Pod::Usage
+
+=item * Getopt::Long
+
+=back
+
+=head1  VERSION
+
+=over 2
+
+=item
+B<apcfmerge>
+
+=item
+Version 1.0.1
+
+=item
+Revision $Rev: 2 $,
+
+=item
+Date $Date: 2009-12-04 10:00:07 +0100 (Fr, 04 Dez 2009) $
+
+=back
+
+=head1  BUGS AND LIMITATIONS
+
+=head2 Windows
+
+The apcfmerge is yet not tested with Windows, because the
+maintainer is currently refusing to use such a platform. If you can
+provide experience with this, please feel free to contact the
+maintainer.
+
+=head2  Circular includes
+
+In this current version, circular includes are not detected. A endless
+loop will be created.
+
+=head2  Contact
+
+=over 2
+
+=item
+
+Please report bugs to
+    Christoph Jeschke <dev@christoph-jeschke.de>.
+
+=item
+
+Please set also your LC_MESSAGES to "C".
+
+=item
+
+Patches are welcome.
+
+=back
+
+=head1  LICENSE AND COPYRIGHT
+
+=head2  COPYRIGHT
+
+apcfmerge -  print the complete httpd config
+Copyright (c) 2009  Christoph Jeschke
+
+=head2  LICENSE
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the
+
+Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor,
+Boston, MA 02110-1301 USA.
+
+=head1  ACKNOWLEDGEMENTS
+
+=over 2
+
+=item Damian Conway
+
+For his book Perl Best Practices (O'Reilly, ISBN 0-596-00173-8)
+
+=back
+
+=cut
