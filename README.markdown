@@ -93,8 +93,9 @@ BUGS AND LIMITATIONS
 
 LICENSE AND COPYRIGHT
   COPYRIGHT
-    apcfmerge - print the complete httpd config Copyright (c) 2009 Christoph
-    Jeschke
+    apcfmerge - print the complete httpd config
+
+    Copyright (c) 2009 Christoph Jeschke
 
   LICENSE
     This program is free software; you can redistribute it and/or modify it

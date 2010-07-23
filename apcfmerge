@@ -450,6 +450,7 @@ Patches are welcome.
 =head2  COPYRIGHT
 
 apcfmerge -  print the complete httpd config
+
 Copyright (c) 2009  Christoph Jeschke
 
 =head2  LICENSE
