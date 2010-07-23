@@ -445,15 +445,13 @@ Patches are welcome.
 
 =back
 
-=head1  LICENSE AND COPYRIGHT
-
-=head2  COPYRIGHT
+=head1  COPYRIGHT
 
 apcfmerge -  print the complete httpd config
 
 Copyright (c) 2009  Christoph Jeschke
 
-=head2  LICENSE
+=head1  LICENSE
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
