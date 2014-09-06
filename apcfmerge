@@ -4,8 +4,6 @@
 #   apcfmerge
 #   built a single configuration file from httpd.conf and all include files
 #
-#   $Id: apcfmerge 2 2009-12-04 09:00:07Z jeschkec $
-#
 ###############################################################################
 
 # Pragmas
